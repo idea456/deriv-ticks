@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "experimentalDecorators": true,
+        "paths": {
+            "@/components/*": ["components/*"],
+            "@/store": ["store/index.js"],
+            "@/styles/*": ["styles/*"]
+        }
+    }
+}
