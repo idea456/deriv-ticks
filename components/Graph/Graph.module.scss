@@ -2,11 +2,34 @@
     width: 50vw;
     height: 45vh;
     padding: 10px;
-    border-radius: 20px;
-    background-color: #f3f3f3;
+    border-radius: 30px;
+    background-color: $SECONDARY_COLOR;
+    display: grid;
+    place-items: center;
+
+    > div {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        background-color: transparent;
+
+        .graph__text {
+            background-color: $SECONDARY_COLOR;
+            opacity: 1;
+            animation: animation--fade 1.2s infinite;
+        }
+    }
 }
 
-.graph__text {
-    text-align: center;
-    background-color: #f3f3f3;
+
+@keyframes animation--fade {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
 }

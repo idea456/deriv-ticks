@@ -6,58 +6,77 @@ import 'chart.js/auto'
 import 'chartjs-adapter-moment';
 import styles from "./Graph.module.scss"
 import { reaction, when } from "mobx"
+import logo from "../../public/logo.svg"
+import Image from "next/image"
 
 
 const Graph = () => {
     const store = useStore()
     const [isFetching, setIsFetching] = useState(false)
     const [dataset, setDataset] = useState([])
-    const [redraw, setRedraw] = useState(false)
 
     const chartRef = useRef(null)
 
     const fetchingLatestTicks = async (symbol) => {
+        const historyTicks = await store.fetchTickHistory(symbol)
         await store.fetchLatestTicks(symbol)
+        return historyTicks
     }
 
 
     useEffect(() => {
         setIsFetching(true)
-        fetchingLatestTicks("R_100").then(() => {
-            setIsFetching(false)
+        const connectionDisposer = when(() => store.api !== null, () => {
+            fetchingLatestTicks(store.asset.symbol).then((historyTicks) => {
+                console.log('fetched!')
+                let { date, quote } = store.tick
+                console.log(dataset, historyTicks)
+                setDataset([...historyTicks, {
+                    x: date,
+                    y: quote
+                }])
+                setIsFetching(false)
+            })
         })
+        return () => {
+            connectionDisposer()
+        }
     }, [])
 
 
     useEffect(() => {
         const tickDisposer = reaction(() => store.tick, (tick) => {
-            setDataset([...dataset, {
+            const datasets = chartRef.current.data.datasets
+            // set threshold (note that max_history_count won't be observed)
+            if (datasets[0].data.length >= store.max_history_count) {
+                console.log('data is out')
+                datasets[0].data.shift()
+            }
+            // using chartJS's ref wont trigger re-render
+            datasets[0].data.push({
                 x: tick.date,
-                y: tick.ask
-            }])
+                y: tick.quote
+            })
+            chartRef.current.update()
         })
         
         // TODO: Re-render the graph and fetch the new ticks when user changes asset, will not trigger reaction if user selects the same asset!
-        const connectionDisposer = reaction(() => store.asset, (asset) => {
+        const assetDisposer = reaction(() => store.asset, (asset) => {
             console.log("[Graph] Asset changed!")
             setIsFetching(true)
-            fetchingLatestTicks(asset).then(() => {
+            fetchingLatestTicks(asset.symbol).then((ticksHistory) => {
                 console.log('[Graph] Successfully fetched new asset!')
-                setIsFetching(false)
-                setDataset([{
+                setDataset([...ticksHistory, {
                     x: store.tick.date,
-                    y: store.tick.ask
+                    y: store.tick.quote
                 }])
-                setRedraw(true)
+                setIsFetching(false)
             })
         })
         // NOTE: dispose reactions to prevent memory leaks
         return () => {
             tickDisposer()
-            connectionDisposer()
-            if (redraw) {
-                setRedraw(false)
-            }
+            assetDisposer()
         }
     })
 
@@ -107,22 +126,23 @@ const Graph = () => {
 
     return (
         <div className={styles.graph}>
-            {isFetching && <h1 className={styles.graph__text}>Loading...</h1>}
-            {!isFetching && dataset.length > 0 && 
+            {isFetching && <div><Image src={logo} alt="Loading..." className={styles.graph__text} width={150} height={25}/></div>}
+            {!isFetching && 
                 <Chart 
                     ref={chartRef} 
                     type="line" 
                     options={options} 
-                    plugins={[plugin]} 
+                    plugins={[plugin]}
                     data={{
                         datasets: [{
-                            label: 'Ask Price',
+                            id: 1,
+                            label: 'Quote Price',
                             data: dataset,
                             borderColor:  'rgb(168, 195, 159)',
                             pointRadius: 2,
-                        }]}
-                    } 
-                    redraw={redraw}
+                        }
+                        ]}
+                    }
                 />} 
         </div>
     )

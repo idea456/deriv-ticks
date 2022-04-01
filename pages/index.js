@@ -1,3 +1,4 @@
+import {useEffect} from "react"
 import Head from 'next/head'
 import Graph from "@/components/Graph"
 import Dropdown from "@/components/Dropdown"
@@ -6,6 +7,14 @@ import { observer } from 'mobx-react'
 
 function Home() {
   const store = useStore()
+
+  useEffect(() => {
+    const checkingConnection = async () => {
+      await store.checkConnection()
+    }
+    // initialize connection to DerivAPI
+    if (!store.api) checkingConnection()
+  }, [])
 
   return (
     <div className="main">
@@ -16,7 +25,7 @@ function Home() {
       </Head>
 
       <div className="main__content">
-        <h1>{store.current_asset}</h1>
+        <h1>{store.asset.name}</h1>
         <Graph />
         {/* Rendering dropdown collections in dedicated components for optimization, see https://mobx.js.org/react-optimizations.html */}
         <Dropdown />

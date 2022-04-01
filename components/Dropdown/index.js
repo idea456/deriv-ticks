@@ -1,40 +1,47 @@
-import { useState, useEffect } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { observer } from "mobx-react"
 import { useStore } from "@/store"
 import styles from "./Dropdown.module.scss"
-import DerivAPI from "@deriv/deriv-api"
-import { trace } from "mobx"
+import DropdownItem from "./DropdownItem"
+import { when, reaction } from "mobx"
 
 function Dropdown() {
     const store = useStore()
+    const [symbols, setSymbols] = useState([])
+    // const symbols = useMemo(() => fetchingAssets())
+
     useEffect(() => {
-        const fetchingAssets = () => {
-            // const api = new DerivAPI({
-            //     endpoint: 'frontend.binaryws.com',
-            //     app_id: 1089
-            // })
-            // const assets = api.assets();
-            // assets.then((res) => {
-            //     console.log('assets', res)
-            // })
-            return
+        // initialize assets list only after connection and api has already been established
+        console.log("is assets cached?", store.all_assets.length)
+        const connectionDisposer = when(() => store.api !== null, async () => {
+            const assets = await store.fetchAssets();
+            setSymbols(assets)
+            store.setAssets(assets)
+        })
+
+        const assetsDisposer = reaction(() => store.assets, (assets) => {
+            setSymbols(assets)
+        })
+
+        return () => {
+            connectionDisposer()
         }
-        fetchingAssets()
     }, [])
 
-    const resetTicks = () => {
+    const resetTicks = (e) => {
         console.log('resetting ticks...')
-        store.setAsset("R_50")
+        console.log(JSON.parse(e.target.value))
+        store.setAsset(JSON.parse(e.target.value))
     }
 
     return (
         <div className={styles.dropdown}>
-            <select>
-                <option value="0">R_100</option>
-                <option value="1">Hewwo</option>
-                <option value="2">Hewwo</option>
-            </select>
-            <button onClick={resetTicks}>Reset</button>
+            {symbols.length > 0 && <select onChange={resetTicks}>
+                {symbols.map((asset, i) => {
+                    // Defereference values late to the lowest component to minimize re-rendering
+                    return <DropdownItem key={i} asset={asset} />
+                })}
+            </select>}
         </div>
     )
 }
