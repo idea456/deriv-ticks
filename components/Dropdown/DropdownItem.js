@@ -1,6 +1,4 @@
-import { useCallback, useMemo } from "react"
 import { observer } from "mobx-react"
-import { useStore } from "@/store"
 
 function DropdownItem({ asset }) {
     const {display_name: name, symbol} = asset;

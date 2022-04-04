@@ -8,7 +8,6 @@ import { when, reaction } from "mobx"
 function Dropdown() {
     const store = useStore()
     const [symbols, setSymbols] = useState([])
-    // const symbols = useMemo(() => fetchingAssets())
 
     useEffect(() => {
         // initialize assets list only after connection and api has already been established

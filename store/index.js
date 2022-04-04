@@ -1,29 +1,29 @@
 import React from 'react';
-import { observable, action, computed, flow, makeAutoObservable, onBecomeObserved, onBecomeUnobserved, trace, spy } from "mobx"
-import { subscribe, onUpdate } from "rxjs"
+import { observable, action, computed, flow, makeAutoObservable, trace, spy } from "mobx"
 import DerivAPI from "@deriv/deriv-api"
-// const WebSocket = require('ws')
 
 const APP_ID = 1089
 const TOKEN = 'OtijgYJor886Iws'
 
 
 export class Store {
+    // options variables
+    max_history_count = 80;
+    default_symbol = {
+        name: "AUD Index",
+        symbol: "WLDAUD"
+    }
+
     // observable variables
     @observable tick = {};
     @observable ticks = [];
     @observable assets = [];
-    @observable current_asset = {
-        name: "AUD Index",
-        symbol: "WLDAUD"
-    };
+    @observable current_asset = this.default_symbol;
     @observable tickStream = null;
     @observable subscription = null;
     @observable connection = null;
     @observable current_api = null;
 
-    // options variables
-    max_history_count = 20;
 
     constructor() {
         makeAutoObservable(this, {
@@ -35,8 +35,6 @@ export class Store {
                 console.log(`[Spy] ${e.name} with args`, e)
             }
         })
-        // onBecomeObserved(this, "tick", this.printTick)
-        // onBecomeUnobserved(this, "tick", this.clearStore)
     }
 
     @action.bound
@@ -47,6 +45,11 @@ export class Store {
     @action.bound
     setTickStream(tickStream) {
         this.tickStream = tickStream
+    }
+
+    @action.bound
+    setSubscription(subscription) {
+        this.subscription = subscription
     }
 
     @computed
@@ -181,20 +184,6 @@ export class Store {
         return connection;
     }
 
-    // checks if a connection has already been made, if not then initialize a new connection
-    // @action.bound
-    // checkConnection() {
-    //     // create a seperate stream for different assets, or else we may get more than one tick for different assets in one stream      
-    //     // if (this.connection !== null && this.ticks.length > 0) {
-    //     //     this.unsubscribe()
-    //     //     this.api.connection.close()
-    //     //     this.setConnection(null)
-    //     // }
-    //     let connection = this.openConnection()
-    //     this.setConnection(connection)
-    //     this.setApi(new DerivAPI({ connection }))
-    // }
-
     @action.bound
     requestAssets() {
         this.connection.send(JSON.stringify({
@@ -208,7 +197,7 @@ export class Store {
         this.connection.send(JSON.stringify({
             ticks_history: asset,
             end: "latest",
-            count: 20,
+            count: this.max_history_count,
             style: "ticks"
         }))
     }
@@ -234,14 +223,9 @@ export class Store {
     *subscribeToTicks(asset) {
         console.log("[Store] Subscribing to ticks stream...")
         
-        // if (this.connection !== null) {
-        //     this.connection.close()
-        //     this.setConnection(null)
-        // }
-        
         if (this.api) {
-            console.log('api', this.api)
-            this.api.basic.connection.close()   
+            this.unsubscribe()
+            yield this.api.basic.connection.close()   
         }
 
         let api = new DerivAPI({
@@ -264,7 +248,7 @@ export class Store {
             }
         }
         this.setTickStream(yield this.api.ticks(asset))
-        this.subscription = this.tickStream.onUpdate().subscribe(updateTicks)
+        this.setSubscription(this.tickStream.onUpdate().subscribe(updateTicks))
     }
 }
 
