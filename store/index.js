@@ -1,5 +1,5 @@
 import React from 'react';
-import { observable, action, computed, flow, makeAutoObservable, onBecomeObserved, onBecomeUnobserved, trace } from "mobx"
+import { observable, action, computed, flow, makeAutoObservable, onBecomeObserved, onBecomeUnobserved, trace, spy } from "mobx"
 import { subscribe, onUpdate } from "rxjs"
 import DerivAPI from "@deriv/deriv-api"
 // const WebSocket = require('ws')
@@ -30,6 +30,11 @@ export class Store {
             fetchLatestTicks: flow.bound,
         })
 
+        spy(e => {
+            if (e.type == "reaction") {
+                console.log(`[Spy] ${e.name} with args`, e)
+            }
+        })
         // onBecomeObserved(this, "tick", this.printTick)
         // onBecomeUnobserved(this, "tick", this.clearStore)
     }
@@ -121,113 +126,130 @@ export class Store {
         return this.tick;
     }
 
-    @computed
+    @action.bound
     setTick(tick) {
         this.tick = tick;
     }
 
 
     @action.bound
-    fetchAssets() {
-        return new Promise((resolve, reject) => {
-            // TOOD: fetch symbols here later
-            const ws = this.openConnection()
-            // when websocket is connected after handshake
-            ws.onopen = function(e) {
-                ws.send(JSON.stringify({
-                    active_symbols: "brief",
-                    "product_type": "basic"
-                }))
-            }
+    handleMessages() {
+        // initialize websocket connection if not available
+        const ws = this.openConnection()
 
-            // when message is received
-            ws.onmessage = (msg) => {
-                let assets = JSON.parse(msg.data).active_symbols
-                this.setAssets(assets)
-                // close the websocket since we already gotten our data
-                ws.close()
-                resolve(assets)
-            }
+        ws.onopen = () => {
+            // this observable is watched by multiple components
+            // whom, once noticed that connection is established, will react and can begin sending their messages
+            console.log('[Websocket] Connection has opened.')
+            this.setConnection(ws)
+        }
 
-            ws.onerror = (err) => {
-                reject(err)
+        // attach handlers
+        ws.onmessage = (m) => {
+            const msg = JSON.parse(m.data)
+            console.log(`[Websocket] Received message with type ${msg.msg_type}`)
+            switch (msg.msg_type) {
+                case "history":
+                    this.handleTickHistory(msg)
+                    break
+                case "active_symbols":
+                    this.setAssets(msg.active_symbols)
+                    console.log("[Store] Active symbols updated.")
+                    break
+                default:
+                    return
             }
-        })
+        }
 
+        ws.onclose = () => {
+            console.log('[Websocket] Closing...')
+            this.setConnection(null)
+        }
     }
 
     @action.bound
     openConnection() {
-        if (!this.connection) {
-            let connection = new WebSocket(`wss://frontend.binaryws.com/websockets/v3?app_id=${APP_ID}`)
-            connection.onopen = (e) => {
-                connection.send(JSON.stringify({
-                    "authorize": TOKEN
-                }))
-            }
-            this.setConnection(connection)
-            return connection;
+        if (this.connection) {
+            return this.connection;
         }
-        return this.connection;
+        let connection = new WebSocket(`wss://frontend.binaryws.com/websockets/v3?app_id=${APP_ID}`)
+        connection.onopen = (e) => {
+            connection.send(JSON.stringify({
+                "authorize": TOKEN
+            }))
+        }
+        return connection;
     }
 
     // checks if a connection has already been made, if not then initialize a new connection
+    // @action.bound
+    // checkConnection() {
+    //     // create a seperate stream for different assets, or else we may get more than one tick for different assets in one stream      
+    //     // if (this.connection !== null && this.ticks.length > 0) {
+    //     //     this.unsubscribe()
+    //     //     this.api.connection.close()
+    //     //     this.setConnection(null)
+    //     // }
+    //     let connection = this.openConnection()
+    //     this.setConnection(connection)
+    //     this.setApi(new DerivAPI({ connection }))
+    // }
+
     @action.bound
-    checkConnection() {
-        // create a seperate stream for different assets, or else we may get more than one tick for different assets in one stream      
-        if (this.connection !== null && this.assets.length > 0) {
-            this.unsubscribe()
-            this.connection.close()
-            this.setConnection(null)
-        }
-        let connection = this.openConnection()
-        this.setConnection(connection)
-        this.setApi(new DerivAPI({ connection }))
+    requestAssets() {
+        this.connection.send(JSON.stringify({
+            active_symbols: "brief",
+            "product_type": "basic"
+        }))
+    }
+    // only to be called after connection is opened
+    @action.bound
+    requestTickHistory(asset) {
+        this.connection.send(JSON.stringify({
+            ticks_history: asset,
+            end: "latest",
+            count: 20,
+            style: "ticks"
+        }))
     }
 
     @action.bound
-    fetchTickHistory(asset) {
-        return new Promise((resolve, reject) => {
-            // const ws = new WebSocket(`wss://frontend.binaryws.com/websockets/v3?app_id=${APP_ID}`)
-            const ws = this.openConnection()
-            // when websocket is connected after handshake
-            ws.onopen = function(e) {
-                ws.send(JSON.stringify({
-                    ticks_history: asset,
-                    end: "latest",
-                    count: 20,
-                    style: "ticks"
-                }))
-            }
-
-            // when message is received
-            ws.onmessage = (msg) => {
-                console.log(msg)
-                let { history } = JSON.parse(msg.data)
-                console.log(history)
-                let { prices, times } = history;
-                let historyTicks = []
-                prices.map((price, i) => {
-                    historyTicks.push({
-                        x: new Date(times[i]),
-                        y: price
-                    })
-                })
-                this.setAssets(historyTicks)
-                // close the websocket since we already gotten our data
-                // ws.close()
-                resolve(historyTicks)
-            }
-
-            ws.onerror = (err) => {
-                reject(err)
-            }
+    handleTickHistory(msg) {
+        let { history } = msg
+        let { prices, times } = history;
+        let ticksHistory = []
+        prices.map((price, i) => {
+            ticksHistory.push({
+                x: new Date(times[i]),
+                y: price
+            })
         })
+        console.log('[Ticks]', this.ticks)
+        this.setTicks(ticksHistory)
+        console.log('[Ticks]', this.ticks)
+        console.log("[Store] Tick history handled.")
     }
 
     // Using generators with yield to perform asynchronous actions
-    *fetchLatestTicks(asset) {
-        this.checkConnection()
+    *subscribeToTicks(asset) {
+        console.log("[Store] Subscribing to ticks stream...")
+        
+        // if (this.connection !== null) {
+        //     this.connection.close()
+        //     this.setConnection(null)
+        // }
+        
+        if (this.api) {
+            console.log('api', this.api)
+            this.api.basic.connection.close()   
+        }
+
+        let api = new DerivAPI({
+            endpoint: 'frontend.binaryws.com',
+            app_id: 1089
+        })
+        this.setApi(api)
+
         const updateTicks = (s) => {
             if (s.raw.symbol === this.current_asset.symbol) {
                 let latestTick = {
@@ -237,11 +259,8 @@ export class Store {
                     quote: s.raw.quote,
                     date: new Date(s.raw.epoch)
                 }
+                
                 this.setTick(latestTick)
-                if (this.ticks.length >= 100) {
-                    this.popTicks()
-                }
-                this.pushTicks(latestTick)
             }
         }
         this.setTickStream(yield this.api.ticks(asset))

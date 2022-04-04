@@ -17,65 +17,74 @@ const Graph = () => {
 
     const chartRef = useRef(null)
 
-    const fetchingLatestTicks = async (symbol) => {
-        const historyTicks = await store.fetchTickHistory(symbol)
-        await store.fetchLatestTicks(symbol)
-        return historyTicks
+    const fetchLatestTicks = (symbol) => {
+        setIsFetching(true)
+        // will not return anything but establish a subscriber
+        // subscriber will continiously update store.tick
+        store.requestTickHistory(symbol);
     }
 
 
     useEffect(() => {
-        setIsFetching(true)
-        const connectionDisposer = when(() => store.api !== null, () => {
-            fetchingLatestTicks(store.asset.symbol).then((historyTicks) => {
-                console.log('fetched!')
-                let { date, quote } = store.tick
-                console.log(dataset, historyTicks)
-                setDataset([...historyTicks, {
-                    x: date,
-                    y: quote
-                }])
-                setIsFetching(false)
-            })
+        // once connection is established, begin by requesting for the ticks history first
+        const connectionDisposer = when(() => store.connection !== null, () => {
+            console.log('[Graph] Fetching latest ticks...')
+            fetchLatestTicks(store.asset.symbol)
         })
+
+        const ticksDisposer = when(() => store.all_ticks.length > 0 && store.assets.length > 0, async () => {
+            console.log("DONE")
+            // store.connection.close()
+            setDataset(store.all_ticks)
+            await store.subscribeToTicks(store.asset.symbol)
+            setIsFetching(false)
+        })
+
         return () => {
             connectionDisposer()
+            ticksDisposer()
         }
     }, [])
 
 
     useEffect(() => {
         const tickDisposer = reaction(() => store.tick, (tick) => {
+            console.log('[Graph] Updating...')
             const datasets = chartRef.current.data.datasets
+            let offset = 3
             // set threshold (note that max_history_count won't be observed)
-            if (datasets[0].data.length >= store.max_history_count) {
-                console.log('data is out')
+            if (datasets[0].data.length >= store.max_history_count + offset) {
                 datasets[0].data.shift()
             }
-            // using chartJS's ref wont trigger re-render
+            setDataset([...dataset, {
+                x: tick.date,
+                y: tick.quote
+            }])
+            console.log('datasets', datasets[0])
             datasets[0].data.push({
                 x: tick.date,
                 y: tick.quote
             })
             chartRef.current.update()
         })
+
+        const historyDisposer = reaction(() => store.all_ticks, (history) => {
+            setDataset(history)
+            console.log('[Ticks] In graph', store.ticks)
+        })
         
         // TODO: Re-render the graph and fetch the new ticks when user changes asset, will not trigger reaction if user selects the same asset!
-        const assetDisposer = reaction(() => store.asset, (asset) => {
-            console.log("[Graph] Asset changed!")
+        const assetDisposer = reaction(() => store.asset, async (asset) => {
             setIsFetching(true)
-            fetchingLatestTicks(asset.symbol).then((ticksHistory) => {
-                console.log('[Graph] Successfully fetched new asset!')
-                setDataset([...ticksHistory, {
-                    x: store.tick.date,
-                    y: store.tick.quote
-                }])
+            store.requestTickHistory(asset.symbol)
+            store.subscribeToTicks(asset.symbol).then(() => {
                 setIsFetching(false)
             })
         })
         // NOTE: dispose reactions to prevent memory leaks
         return () => {
             tickDisposer()
+            historyDisposer()
             assetDisposer()
         }
     })

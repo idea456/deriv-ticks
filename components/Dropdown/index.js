@@ -12,25 +12,24 @@ function Dropdown() {
 
     useEffect(() => {
         // initialize assets list only after connection and api has already been established
-        console.log("is assets cached?", store.all_assets.length)
-        const connectionDisposer = when(() => store.api !== null, async () => {
-            const assets = await store.fetchAssets();
-            setSymbols(assets)
-            store.setAssets(assets)
+        const connectionDisposer = when(() => store.connection !== null && store.connection.readyState === 1, async () => {
+            // send message to websocket to request for active symbols
+            store.requestAssets()
         })
 
+        // once we received our active symbols
         const assetsDisposer = reaction(() => store.assets, (assets) => {
             setSymbols(assets)
         })
 
         return () => {
             connectionDisposer()
+            assetsDisposer()
         }
     }, [])
 
     const resetTicks = (e) => {
-        console.log('resetting ticks...')
-        console.log(JSON.parse(e.target.value))
+        console.log('[Dropdown] resetting ticks...')
         store.setAsset(JSON.parse(e.target.value))
     }
 

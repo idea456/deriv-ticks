@@ -9,11 +9,10 @@ function Home() {
   const store = useStore()
 
   useEffect(() => {
-    const checkingConnection = async () => {
-      await store.checkConnection()
+    // initialize connection to DerivAPI and attach stream handlers
+    if (!store.connection) {
+      store.handleMessages()
     }
-    // initialize connection to DerivAPI
-    if (!store.api) checkingConnection()
   }, [])
 
   return (
