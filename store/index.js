@@ -1,5 +1,5 @@
 import React from 'react';
-import { observable, action, computed, flow, makeAutoObservable, trace, spy } from "mobx"
+import { observable, action, computed, flow, makeAutoObservable, spy } from "mobx"
 import DerivAPI from "@deriv/deriv-api"
 import {OnError} from "rxjs"
 
@@ -87,7 +87,6 @@ export class Store {
 
     @action.bound
     setApi(api) {
-        trace(this, "api")
         this.current_api = api
     }
 
@@ -103,7 +102,6 @@ export class Store {
 
     @computed
     get asset() {
-        trace()
         return this.current_asset;
     }
 
