@@ -1,0 +1,5 @@
+@mixin graph__component {
+    display: grid;
+    place-items: center;
+    background-color: $SECONDARY_COLOR;
+}

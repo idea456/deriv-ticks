@@ -1,6 +1,7 @@
 import React from 'react';
 import { observable, action, computed, flow, makeAutoObservable, trace, spy } from "mobx"
 import DerivAPI from "@deriv/deriv-api"
+import {OnError} from "rxjs"
 
 const APP_ID = 1089
 const TOKEN = 'OtijgYJor886Iws'
@@ -23,7 +24,10 @@ export class Store {
     @observable subscription = null;
     @observable connection = null;
     @observable current_api = null;
-
+    @observable error = {
+        msg: "",
+        isError: false
+    };
 
     constructor() {
         makeAutoObservable(this, {
@@ -35,6 +39,15 @@ export class Store {
                 console.log(`[Spy] ${e.name} with args`, e)
             }
         })
+    }
+
+    @action.bound
+    setError(error) {
+        this.error = error
+    }
+
+    get error() {
+        return this.error
     }
 
     @action.bound
@@ -164,6 +177,10 @@ export class Store {
             }
         }
 
+        ws.onerror = (m) => {
+            console.log("ERRROR", m)
+        }
+
         ws.onclose = () => {
             console.log('[Websocket] Closing...')
             this.setConnection(null)
@@ -213,27 +230,27 @@ export class Store {
                 y: price
             })
         })
-        console.log('[Ticks]', this.ticks)
         this.setTicks(ticksHistory)
-        console.log('[Ticks]', this.ticks)
-        console.log("[Store] Tick history handled.")
     }
 
     // Using generators with yield to perform asynchronous actions
     *subscribeToTicks(asset) {
         console.log("[Store] Subscribing to ticks stream...")
-        
-        if (this.api) {
+
+        if (this.subscription) {
             this.unsubscribe()
+        }
+        
+        // if the user switches between different symbols, then close/reset the tick stream connection!
+        if (this.api) {
             yield this.api.basic.connection.close()   
         }
 
         let api = new DerivAPI({
-            endpoint: 'frontend.binaryws.com',
             app_id: 1089
         })
         this.setApi(api)
-
+        
         const updateTicks = (s) => {
             if (s.raw.symbol === this.current_asset.symbol) {
                 let latestTick = {
@@ -245,10 +262,26 @@ export class Store {
                 }
                 
                 this.setTick(latestTick)
+                console.log('latestTick', s.raw)
             }
         }
-        this.setTickStream(yield this.api.ticks(asset))
-        this.setSubscription(this.tickStream.onUpdate().subscribe(updateTicks))
+
+        try {
+            this.setError({
+                msg: "",
+                isError: false
+            })
+            this.setTickStream(yield this.api.ticks(asset))
+            console.log('tick stream', this.tickStream)
+            this.setSubscription(this.tickStream.onUpdate().subscribe(updateTicks))
+        } catch({error}) {
+            if (error.code === "MarketIsClosed") {
+                this.setError({
+                    msg: "Market is currently closed.",
+                    isError: true
+                })
+            }
+        }
     }
 }
 

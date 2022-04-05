@@ -57,7 +57,6 @@ const Graph = () => {
 
     useEffect(() => {
         const tickDisposer = reaction(() => store.current_tick, (tick) => {
-            console.log('[Graph] Updating...')
             const datasets = chartRef.current.data.datasets
             let offset = 1
             // set threshold (note that max_history_count won't be observed)
@@ -128,7 +127,7 @@ const Graph = () => {
     return (
         <div className={styles.graph}>
             {isFetching && <div><Image src={logo} alt="Loading..." className={styles.graph__text} width={150} height={25}/></div>}
-            {!isFetching && 
+            {!isFetching && !store.error.isError && 
                 <Chart 
                     ref={chartRef} 
                     type="line" 
@@ -142,9 +141,13 @@ const Graph = () => {
                             borderColor:  'rgb(230, 62, 109)',
                             pointRadius: 0,
                         }
-                        ]}
-                    }
-                />} 
+                    ]}
+                }
+            />} 
+            {store.error.isError && 
+                <div className={styles.error__container}>
+                    <h1>{store.error.msg}</h1>
+                </div>}
         </div>
     )
 }
