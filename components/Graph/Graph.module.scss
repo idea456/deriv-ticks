@@ -1,0 +1,40 @@
+@import "../../styles/mixins";
+
+.graph {
+    width: 50vw;
+    height: 45vh;
+    padding: 10px;
+    border-radius: 30px;
+    @include graph__component;
+
+    > div {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        background-color: transparent;
+
+        .graph__text {
+            background-color: $SECONDARY_COLOR;
+            opacity: 1;
+            animation: animation--fade 1.2s infinite;
+        }
+    }
+}
+
+.error__container {
+    @include graph__component;
+    font-size: 14px;
+}
+
+
+@keyframes animation--fade {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}

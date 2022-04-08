@@ -6,6 +6,6 @@
             "@/components/*": ["components/*"],
             "@/store": ["store/index.js"],
             "@/styles/*": ["styles/*"]
-        }
+        },
     }
 }
