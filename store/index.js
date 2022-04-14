@@ -11,7 +11,7 @@ export class Store {
     // options variables
     max_history_count = 80;
     default_symbol = {
-        name: "AUD Index",
+        name: "AUD Basket",
         symbol: "WLDAUD"
     }
 
